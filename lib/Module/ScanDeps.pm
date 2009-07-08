@@ -500,7 +500,7 @@ sub path_to_inc_name($$) {
     return $inc_name;
 }
 
-my $Keys = 'files|keys|recurse|rv|skip|first|execute|compile|warn_missing|cache_cb';
+my $Keys = 'files|keys|recurse|rv|skip|first|execute|compile|warn_missing|cache_cb|cache_file';
 sub scan_deps {
     my %args = (
         rv => {},
@@ -510,7 +510,21 @@ sub scan_deps {
     if (!defined($args{keys})) {
         $args{keys} = [map {path_to_inc_name($_, $args{warn_missing})} @{$args{files}}];
     }
-
+    my $cache_file = $args{cache_file};
+    my $using_cache;
+    if ($cache_file) {
+        require Module::ScanDeps::Cache;
+        $using_cache = Module::ScanDeps::Cache::init_from_file($cache_file);
+        if( $using_cache ){
+            $args{cache_cb} = Module::ScanDeps::Cache::get_cache_cb();
+        }else{
+            my @missing = Module::ScanDeps::Cache::prereq_missing();
+            warn join(' ',
+                      "Can not use cache_file: Needs Modules [",
+                      @missing,
+                      "]\n",);
+        }
+    }
     my ($type, $path);
     foreach my $input_file (@{$args{files}}) {
         if ($input_file !~ $ScanFileRE) {
@@ -551,6 +565,10 @@ sub scan_deps {
             compile => $args{compile},
             skip    => $args{skip}
         );
+    }
+
+    if ( $using_cache ){
+        Module::ScanDeps::Cache::store_cache();
     }
 
     # do not include the input files themselves as dependencies!
@@ -632,7 +650,7 @@ sub scan_deps_static {
             rv       => $rv,
             skip     => $skip,
             recurse  => 0,
-            cache_cb => $cache_cb, 
+            cache_cb => $cache_cb,
             _skip    => $_skip,
         }) or ($args->{_deep} and return);
         last if $count == keys %$rv;
