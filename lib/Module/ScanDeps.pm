@@ -96,9 +96,9 @@ the structure returned by C<get_files>.
 =head2 B<scan_deps>
 
     $rv_ref = scan_deps(
-        files   => \@files,     recurse => $recurse,
-        rv      => \%rv,        skip    => \%skip,
-        compile => $compile,    execute => $execute,
+        files      => \@files,     recurse => $recurse,
+        rv         => \%rv,        skip    => \%skip,
+        compile    => $compile,    execute => $execute,
     );
     $rv_ref = scan_deps(@files); # shorthand, with recurse => 1
 
@@ -119,6 +119,10 @@ termination to determine additional runtime dependencies.
 
 If C<$execute> is an array reference, runs the files contained
 in it instead of C<@files>.
+
+If performance of the scanning process is a concern, C<cache_file> can be
+set to a filename. The scanning results will be cached and written to the
+file. This will speed up the scanning process on subsequent runs.
 
 Additionally, an option C<warn_missing> is recognized. If set to true,
 C<scan_deps> issues a warning to STDERR for every module file that the
