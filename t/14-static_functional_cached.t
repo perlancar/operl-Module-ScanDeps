@@ -43,6 +43,7 @@ my $skip_cache_tests = 1;
 eval {require Module::ScanDeps::Cache;};
 unless ($@){
     $skip_cache_tests = Module::ScanDeps::Cache::prereq_missing();
+    warn $skip_cache_tests, "\n";
 }
 my $cache_file = 'deps_cache.dat';
 
@@ -285,7 +286,7 @@ for my $t(qw/write_cache use_cache/){
 }     ### end of for (qw/write_cache use_cache/)
 
 
-unlink( $cache_file );
+
 
 
 ### cache testing helper functions ###
@@ -317,6 +318,65 @@ sub cache_cb{
 
 }### end cache testing helper functions ###
 
+### test Module::ScanDeps::Cache.pm
 
+SKIP:
+{
+    skip "Skipping M:SD::Cache tests" , 9 if $skip_cache_tests;
+    my %files = ('file1.pl' => "use TestModule;\n",
+                 'file2.pl' => "use TestModule;\n",
+                 'file3.pl' => "use TestModule;\n return 0;\n");
+ 
+    for my $name (keys %files){
+        open my $fh, '>', $name or die "Can not open file $name: $!";
+        print $fh $files{$name};
+        close $fh or die "Can not close file $name: $!";
+    }
+    
+    my $cb = Module::ScanDeps::Cache::get_cache_cb();
+    my $mod = [];
+    my $ret = $cb->(key     => 'testfile',
+                    file    => 'file1.pl',
+                    action  => 'read',
+                    modules => $mod
+                );
+    is( $ret, 0, "File not present in cache");
+    $ret = $cb->(key     => 'testfile',
+                 file    => 'file1.pl',
+                 modules => [qw /TestModule.pm/],
+                 action  => 'write',
+            );
+    is( $ret, 1, "Writing file to cache");
+    $ret = $cb->(key     => 'testfile',
+                 file    => 'file1.pl',
+                 action  => 'read',
+                 modules => $mod
+             );
+    is( $ret, 1, "File is present in cache");
+    is( $mod->[0], 'TestModule.pm', "cache_cb sets modules 1");
+    $mod = [];
+    $ret = $cb->(key     => 'testfile',
+                 file    => 'file2.pl',
+                 action  => 'read',
+                 modules => $mod
+             );
+    is( $ret, 1, "Identical file returns the same dependencies from cache");
+    is( $mod->[0], 'TestModule.pm', "cache_cb sets modules 2");
+    $mod = [];
+    $ret = $cb->(key     => 'testfile',
+                 file    => 'file3.pl',
+                 action  => 'read',
+                 modules => $mod
+             );
+    is( $ret, 0, "No cached deps returned for file with different content");
+    is( @$mod, 0, "cache_cb does not set modules if no deps found");
 
+    eval {$cb->(action => 'foo')};
+    ok ($@ =~ /must be read or write/, "cache_cb dies on wrong action");
+    for my $name (keys %files){
+        unlink $name or die "Could not unlink file $name: $!";
+    }
+}
+
+unlink( $cache_file );
 __END__
