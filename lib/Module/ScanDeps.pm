@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use vars qw( $VERSION @EXPORT @EXPORT_OK @ISA $CurrentPackage @IncludeLibs $ScanFileRE );
 
-$VERSION   = '0.91';
+$VERSION   = '0.92';
 @EXPORT    = qw( scan_deps scan_deps_runtime );
 @EXPORT_OK = qw( scan_line scan_chunk add_deps scan_deps_runtime path_to_inc_name );
 
@@ -803,16 +803,21 @@ sub scan_line {
 sub _typical_module_loader_chunk {
   local $_ = shift;
   my $loader = shift;
+  my $prefix='';
+  if (@_ and $_[0]) {
+    $prefix=$_[0].'::';
+  }
   my $loader_file = $loader;
   $loader_file =~ s/::/\//;
   $loader_file .= ".pm";
   $loader = quotemeta($loader);
 
-  if (/^\s* use \s+ $loader \b \s* (.*)/sx) {
+  if (/^\s* use \s+ $loader(?!\:) \b \s* (.*)/sx) {
     return [
       $loader_file,
-      map { s{::}{/}g; "$_.pm" }
-      grep { length and !/^q[qw]?$/ } split(/[^\w:]+/, $1)
+      map { my $mod="$prefix$_";$mod=~s{::}{/}g; "$mod.pm" }
+      grep { length and !/^q[qw]?$/ and !/-/ } split(/[^\w:-]+/, $1)
+      #should skip any module name that contains '-', not split it in two
     ];
   }
   return();
@@ -827,8 +832,13 @@ sub scan_chunk {
 
         # TODO: There's many more of these "loader" type modules on CPAN!
         # scan for the typical module-loader modules
-        foreach my $loader (qw(asa base prefork POE encoding maybe only::matching)) {
+        foreach my $loader (qw(asa base parent prefork POE encoding maybe only::matching)) {
           my $retval = _typical_module_loader_chunk($_, $loader);
+          return $retval if $retval;
+        }
+
+        foreach my $loader (qw(Catalyst)) {
+          my $retval = _typical_module_loader_chunk($_, $loader,'Catalyst::Plugin');
           return $retval if $retval;
         }
 
